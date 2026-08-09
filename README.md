@@ -10,6 +10,20 @@ Finger-strength dynamometer
 
 The firmware expects HX711 data on `D4` and clock on `D5`.
 
+## BLE
+
+The XIAO advertises as `Dyno` with an open GATT service. Connecting does not
+require pairing or bonding.
+
+| Item         | UUID                                   | Properties                    | Value                                                         |
+| ------------ | -------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| Dyno service | `7b7e1000-6ba3-4d8f-9e2f-4f2f0c7a0000` | —                             | —                                                             |
+| Force        | `7b7e1001-6ba3-4d8f-9e2f-4f2f0c7a0000` | Read, Notify                  | UTF-8 newtons with three decimal places, for example `12.345` |
+| Command      | `7b7e1002-6ba3-4d8f-9e2f-4f2f0c7a0000` | Write, Write Without Response | A UTF-8 command, with or without a trailing newline           |
+
+Force notifications contain the latest filtered reading and are limited to
+40 updates per second.
+
 ## Library
 
 - [HX711 by bogde](https://github.com/bogde/HX711)

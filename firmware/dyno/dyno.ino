@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "BleTelemetry.h"
 #include "DynoTypes.h"
 #include "EffortDetector.h"
 #include "HX711.h"
@@ -27,6 +28,7 @@ constexpr size_t COMMAND_BUFFER_SIZE = 96;
 HX711 loadcell;
 Preferences preferences;
 SerialTelemetry serialTelemetry;
+BleTelemetry bleTelemetry;
 dyno::EffortDetector effortDetector(DEFAULT_EFFORT_CONFIG);
 
 bool hx711Detected = false;
@@ -47,10 +49,9 @@ char commandBuffer[COMMAND_BUFFER_SIZE];
 size_t commandLength = 0;
 bool discardCommandUntilNewline = false;
 
-// This is the transport fan-out point. BLE can publish the same typed objects
-// here next, without changing filtering or effort detection.
 void publishMeasurement(const dyno::ForceMeasurement &measurement) {
   serialTelemetry.publishMeasurement(measurement);
+  bleTelemetry.publishMeasurement(measurement);
 }
 
 void publishEffortEvent(const dyno::EffortEvent &event) {
@@ -364,6 +365,13 @@ void readSerialCommands() {
   }
 }
 
+void readBleCommands() {
+  char command[COMMAND_BUFFER_SIZE];
+  if (bleTelemetry.takeCommand(command, sizeof(command))) {
+    handleCommand(command);
+  }
+}
+
 void processSample(long raw, uint32_t timestampMs) {
   const float netCounts = static_cast<float>(raw - tareOffset);
 
@@ -415,6 +423,7 @@ void setup() {
   delay(1500);
 
   Serial.println(F("# dyno_starting"));
+  bleTelemetry.begin();
 
   loadcell.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
   if (!loadcell.wait_ready_timeout(2000)) {
@@ -433,7 +442,9 @@ void setup() {
 }
 
 void loop() {
+  bleTelemetry.poll();
   readSerialCommands();
+  readBleCommands();
 
   if (!hx711Detected || !loadcell.is_ready()) {
     delay(1);
