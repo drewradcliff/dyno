@@ -1,5 +1,6 @@
 import * as ExpoDevice from 'expo-device';
 import { StatusBar } from 'expo-status-bar';
+import { useMemo } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { State } from 'react-native-ble-plx';
@@ -7,6 +8,7 @@ import { State } from 'react-native-ble-plx';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DYNO_DEVICE_NAME } from '@/features/ble/dyno-ble';
+import { useDynoConnection } from '@/features/ble/use-dyno-connection';
 import { useDynoScanner } from '@/features/ble/use-dyno-scanner';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -27,9 +29,52 @@ function adapterStatus(state: State) {
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const { adapterState, devices, error, isScanning, startScan, stopScan } = useDynoScanner();
+  const {
+    adapterState,
+    devices,
+    error: scanError,
+    isScanning,
+    startScan,
+    stopScan,
+  } = useDynoScanner();
+  const {
+    connect,
+    connectedDevice,
+    connectingDeviceId,
+    disconnect,
+    error: connectionError,
+    rememberedDevice,
+  } = useDynoConnection(stopScan);
   const isNativeDevice = Platform.OS !== 'web' && ExpoDevice.isDevice;
-  const canScan = isNativeDevice && adapterState === State.PoweredOn;
+  const canScan =
+    isNativeDevice &&
+    adapterState === State.PoweredOn &&
+    !connectedDevice &&
+    !connectingDeviceId;
+  const error = connectionError ?? scanError;
+  const displayedDevices = useMemo(() => {
+    const discoveredDevices = devices.map((device) => ({
+      id: device.id,
+      name: (device.localName ?? device.name ?? DYNO_DEVICE_NAME).toLowerCase(),
+      isRemembered: device.id === rememberedDevice?.id,
+    }));
+
+    if (rememberedDevice && !discoveredDevices.some((device) => device.id === rememberedDevice.id)) {
+      discoveredDevices.unshift({
+        ...rememberedDevice,
+        isRemembered: true,
+      });
+    }
+
+    return discoveredDevices.sort(
+      (left, right) => Number(right.isRemembered) - Number(left.isRemembered),
+    );
+  }, [devices, rememberedDevice]);
+  const status = connectedDevice
+    ? 'dyno connected'
+    : connectingDeviceId
+      ? 'Connecting to dyno…'
+      : adapterStatus(adapterState);
 
   return (
     <ThemedView style={styles.screen}>
@@ -51,12 +96,14 @@ export default function HomeScreen() {
                 styles.statusDot,
                 {
                   backgroundColor:
-                    adapterState === State.PoweredOn ? theme.success : theme.textSecondary,
+                    connectedDevice || adapterState === State.PoweredOn
+                      ? theme.success
+                      : theme.textSecondary,
                 },
               ]}
             />
             <View style={styles.statusCopy}>
-              <ThemedText style={styles.statusTitle}>{adapterStatus(adapterState)}</ThemedText>
+              <ThemedText style={styles.statusTitle}>{status}</ThemedText>
             </View>
           </ThemedView>
 
@@ -98,7 +145,7 @@ export default function HomeScreen() {
             {isScanning && <ThemedText type="small">Scanning…</ThemedText>}
           </View>
 
-          {devices.length === 0 ? (
+          {displayedDevices.length === 0 ? (
             <ThemedView type="backgroundElement" style={styles.emptyState}>
               <ThemedText style={styles.emptyTitle}>
                 {isScanning ? 'Looking for dyno…' : 'No devices found yet'}
@@ -109,18 +156,42 @@ export default function HomeScreen() {
             </ThemedView>
           ) : (
             <View style={styles.deviceList}>
-              {devices.map((device) => (
-                <ThemedView key={device.id} type="backgroundElement" style={styles.deviceCard}>
-                  <View style={[styles.deviceIcon, { backgroundColor: theme.accentMuted }]}>
-                    <ThemedText style={{ color: theme.accent }}>D</ThemedText>
-                  </View>
-                  <View style={styles.deviceCopy}>
-                    <ThemedText style={styles.deviceName}>
-                      {device.localName ?? device.name ?? DYNO_DEVICE_NAME}
-                    </ThemedText>
-                  </View>
-                </ThemedView>
-              ))}
+              {displayedDevices.map((device) => {
+                const isConnected = connectedDevice?.id === device.id;
+                const isConnecting = connectingDeviceId === device.id;
+                const connectionIsBusy = Boolean(connectingDeviceId || connectedDevice);
+
+                return (
+                  <ThemedView key={device.id} type="backgroundElement" style={styles.deviceCard}>
+                    <View style={[styles.deviceIcon, { backgroundColor: theme.accentMuted }]}>
+                      <ThemedText style={{ color: theme.accent }}>D</ThemedText>
+                    </View>
+                    <View style={styles.deviceCopy}>
+                      <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{
+                        busy: isConnecting,
+                        disabled: !isConnected && connectionIsBusy,
+                      }}
+                      disabled={!isConnected && connectionIsBusy}
+                      onPress={() =>
+                        void (isConnected ? disconnect() : connect(device.id, device.name))
+                      }
+                      style={({ pressed }) => [
+                        styles.deviceButton,
+                        { borderColor: theme.accent },
+                        !isConnected && connectionIsBusy && styles.disabled,
+                        pressed && styles.pressed,
+                      ]}>
+                      <ThemedText style={[styles.deviceButtonText, { color: theme.accent }]}>
+                        {isConnected ? 'Disconnect' : isConnecting ? 'Connecting…' : 'Connect'}
+                      </ThemedText>
+                    </Pressable>
+                  </ThemedView>
+                );
+              })}
             </View>
           )}
         </ScrollView>
@@ -247,6 +318,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deviceName: {
+    fontWeight: '700',
+  },
+  deviceButton: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deviceButtonText: {
     fontWeight: '700',
   },
 });

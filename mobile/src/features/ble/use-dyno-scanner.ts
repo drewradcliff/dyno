@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { BleManager, type Device, State } from 'react-native-ble-plx';
+import { type Device, State } from 'react-native-ble-plx';
 
+import { getBleManager } from '@/features/ble/ble-manager';
 import { DYNO_SERVICE_UUID, SCAN_DURATION_MS } from '@/features/ble/dyno-ble';
-
-let manager: BleManager | undefined;
-
-function getBleManager() {
-  manager ??= new BleManager();
-  return manager;
-}
 
 async function requestAndroidPermissions() {
   if (Platform.OS !== 'android') {
