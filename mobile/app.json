@@ -36,6 +36,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "neverForLocation": true,
+          "bluetoothAlwaysPermission": "Allow Dyno to find and connect to your force sensor."
+        }
       ]
     ],
     "experiments": {
