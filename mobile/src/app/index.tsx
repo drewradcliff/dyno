@@ -9,8 +9,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DYNO_DEVICE_NAME } from '@/features/ble/dyno-ble';
 import { useDynoConnection } from '@/features/ble/use-dyno-connection';
+import { useDynoForce } from '@/features/ble/use-dyno-force';
 import { useDynoScanner } from '@/features/ble/use-dyno-scanner';
 import { useTheme } from '@/hooks/use-theme';
+
+const POUNDS_PER_NEWTON = 0.2248089431;
 
 function adapterStatus(state: State) {
   switch (state) {
@@ -25,6 +28,10 @@ function adapterStatus(state: State) {
     default:
       return 'Checking Bluetooth…';
   }
+}
+
+function formatForce(force: number | null) {
+  return force === null ? '—' : (force * POUNDS_PER_NEWTON).toFixed(1);
 }
 
 export default function HomeScreen() {
@@ -45,13 +52,14 @@ export default function HomeScreen() {
     error: connectionError,
     rememberedDevice,
   } = useDynoConnection(stopScan);
+  const { currentForce, error: forceError, peakForce } = useDynoForce(connectedDevice);
   const isNativeDevice = Platform.OS !== 'web' && ExpoDevice.isDevice;
   const canScan =
     isNativeDevice &&
     adapterState === State.PoweredOn &&
     !connectedDevice &&
     !connectingDeviceId;
-  const error = connectionError ?? scanError;
+  const error = connectionError ?? forceError ?? scanError;
   const displayedDevices = useMemo(() => {
     const discoveredDevices = devices.map((device) => ({
       id: device.id,
@@ -84,7 +92,6 @@ export default function HomeScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <ThemedText style={styles.eyebrow}>FORCE SENSOR</ThemedText>
             <ThemedText type="title" style={styles.title}>
               dyno
             </ThemedText>
@@ -106,6 +113,35 @@ export default function HomeScreen() {
               <ThemedText style={styles.statusTitle}>{status}</ThemedText>
             </View>
           </ThemedView>
+
+          <View style={styles.metrics}>
+            <ThemedView type="backgroundElement" style={styles.metricCard}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Current force
+              </ThemedText>
+              <View style={styles.metricValueRow}>
+                <ThemedText style={styles.metricValue}>{formatForce(currentForce)}</ThemedText>
+                {currentForce !== null && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    lbs
+                  </ThemedText>
+                )}
+              </View>
+            </ThemedView>
+            <ThemedView type="backgroundElement" style={styles.metricCard}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Peak force
+              </ThemedText>
+              <View style={styles.metricValueRow}>
+                <ThemedText style={styles.metricValue}>{formatForce(peakForce)}</ThemedText>
+                {peakForce !== null && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    lbs
+                  </ThemedText>
+                )}
+              </View>
+            </ThemedView>
+          </View>
 
           {!isNativeDevice && (
             <ThemedView
@@ -219,12 +255,6 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 12,
   },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginBottom: 6,
-  },
   title: {
     fontSize: 44,
     lineHeight: 50,
@@ -249,6 +279,28 @@ const styles = StyleSheet.create({
   },
   statusTitle: {
     fontWeight: '700',
+  },
+  metrics: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metricCard: {
+    flex: 1,
+    minHeight: 112,
+    borderRadius: 18,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  metricValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+  },
+  metricValue: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   notice: {
     borderRadius: 14,
