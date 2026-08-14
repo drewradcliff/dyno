@@ -1,0 +1,27 @@
+# Dyno hardware
+
+KiCad design for the battery-powered Dyno finger-strength sensor. The board
+combines a Seeed Studio XIAO ESP32C3 with an HX711 ADC and an external load
+cell.
+
+> **Status:** early, unverified prototype. The schematic and PCB have not yet
+> been validated on manufactured hardware.
+
+## Open the project
+
+Open [`dyno.kicad_pro`](dyno.kicad_pro) with KiCad 10 or newer.
+
+## Attribution and licensing
+
+The original Dyno hardware design is licensed under the repository's
+[MIT License](../LICENSE).
+
+The vendored Seeed Studio XIAO KiCad libraries were created by Seeed Studio and
+community contributors and are licensed separately under CC BY-SA 4.0. See
+[`libraries/README.md`](libraries/README.md) and
+[`libraries/LICENSE-CC-BY-SA-4.0.md`](libraries/LICENSE-CC-BY-SA-4.0.md).
+
+The design also uses symbols and footprints from the official KiCad libraries,
+which are distributed under CC BY-SA 4.0 with the KiCad libraries exception.
+That exception permits their use in electronic designs without requiring the
+design itself to adopt CC BY-SA.

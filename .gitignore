@@ -1,2 +1,11 @@
 .DS_Store
 *.log
+
+# KiCad local state and generated files
+*-backups/
+_autosave-*
+~*.lck
+*.kicad_prl
+*.bak
+fp-info-cache
+hardware/output/
