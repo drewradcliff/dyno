@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Preferences.h>
+#include <esp_sleep.h>
 
 #include <ctype.h>
 #include <limits.h>
@@ -15,6 +16,13 @@
 
 constexpr int HX711_DOUT_PIN = D4;
 constexpr int HX711_SCK_PIN = D5;
+constexpr int WAKE_BUTTON_PIN = D1;
+
+// R2 holds D1 high and SW1 pulls it low. Requiring a hold avoids putting the
+// dyno to sleep during an accidental tap; sleep begins after the button is
+// released so the same low level cannot immediately wake it again.
+constexpr uint32_t WAKE_BUTTON_DEBOUNCE_MS = 30;
+constexpr uint32_t WAKE_BUTTON_SLEEP_HOLD_MS = 2000;
 
 // A positive factor means raw count rises with applied force. Use a negative
 // factor if it falls. Serial calibration commands are persisted in flash.
@@ -45,6 +53,13 @@ float filteredCounts = 0.0f;
 bool hasMeasurement = false;
 uint32_t nextSampleSequence = 0;
 
+bool wakeButtonRawPressed = false;
+bool wakeButtonStablePressed = false;
+bool wakeButtonArmed = false;
+bool sleepWhenWakeButtonReleased = false;
+uint32_t wakeButtonRawChangedAtMs = 0;
+uint32_t wakeButtonPressedAtMs = 0;
+
 char commandBuffer[COMMAND_BUFFER_SIZE];
 size_t commandLength = 0;
 bool discardCommandUntilNewline = false;
@@ -60,6 +75,92 @@ void publishEffortEvent(const dyno::EffortEvent &event) {
 
 void cancelActiveEffort() {
   publishEffortEvent(effortDetector.cancel(millis()));
+}
+
+void printWakeCause() {
+  const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+  if (wakeCause == ESP_SLEEP_WAKEUP_GPIO) {
+    Serial.println(F("# wake_cause=button"));
+  } else {
+    Serial.print(F("# wake_cause="));
+    Serial.println(static_cast<int>(wakeCause));
+  }
+}
+
+void enterDeepSleep() {
+  cancelActiveEffort();
+  if (hx711Detected) {
+    loadcell.power_down();
+  }
+  if (preferencesReady) {
+    preferences.end();
+    preferencesReady = false;
+  }
+
+  const esp_err_t wakeResult = esp_deep_sleep_enable_gpio_wakeup(
+      1ULL << WAKE_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
+  if (wakeResult != ESP_OK) {
+    Serial.print(F("# error,wake_button_config_failed="));
+    Serial.println(esp_err_to_name(wakeResult));
+    Serial.flush();
+    delay(1000);
+    ESP.restart();
+  }
+
+  Serial.println(F("# deep_sleep,wake_source=D1,active_level=low"));
+  Serial.flush();
+  delay(20);
+  esp_deep_sleep_start();
+
+  // esp_deep_sleep_start() does not return; keep the compiler aware of that.
+  while (true) {
+  }
+}
+
+void initializeWakeButton() {
+  // The schematic includes an external 10 kOhm pull-up (R2). INPUT_PULLUP also
+  // keeps the input defined if R2 is omitted during breadboard testing.
+  pinMode(WAKE_BUTTON_PIN, INPUT_PULLUP);
+  wakeButtonRawPressed = digitalRead(WAKE_BUTTON_PIN) == LOW;
+  wakeButtonStablePressed = wakeButtonRawPressed;
+  wakeButtonRawChangedAtMs = millis();
+  wakeButtonPressedAtMs = millis();
+
+  // A button still held after waking must be released before it can request
+  // sleep. Otherwise a long wake press would cause a sleep/wake loop.
+  wakeButtonArmed = !wakeButtonStablePressed;
+}
+
+void pollWakeButton() {
+  const uint32_t nowMs = millis();
+  const bool rawPressed = digitalRead(WAKE_BUTTON_PIN) == LOW;
+
+  if (rawPressed != wakeButtonRawPressed) {
+    wakeButtonRawPressed = rawPressed;
+    wakeButtonRawChangedAtMs = nowMs;
+  }
+
+  if (wakeButtonStablePressed != wakeButtonRawPressed &&
+      nowMs - wakeButtonRawChangedAtMs >= WAKE_BUTTON_DEBOUNCE_MS) {
+    wakeButtonStablePressed = wakeButtonRawPressed;
+    if (wakeButtonStablePressed) {
+      if (wakeButtonArmed) {
+        wakeButtonPressedAtMs = nowMs;
+      }
+    } else {
+      wakeButtonArmed = true;
+      if (sleepWhenWakeButtonReleased) {
+        enterDeepSleep();
+      }
+    }
+  }
+
+  if (wakeButtonArmed && wakeButtonStablePressed &&
+      !sleepWhenWakeButtonReleased &&
+      nowMs - wakeButtonPressedAtMs >= WAKE_BUTTON_SLEEP_HOLD_MS) {
+    sleepWhenWakeButtonReleased = true;
+    Serial.println(F("# sleep_requested,release_button_to_sleep"));
+  }
 }
 
 void beginTare() {
@@ -120,7 +221,7 @@ void printEffortConfig() {
 }
 
 void printHelp() {
-  Serial.println(F("# commands: tare | factor <counts_per_newton> | calibrate <known_newtons> | thresholds <start_n> <end_n> <hold_ms> | last | status | help"));
+  Serial.println(F("# commands: tare | factor <counts_per_newton> | calibrate <known_newtons> | thresholds <start_n> <end_n> <hold_ms> | last | status | sleep | help"));
 }
 
 void printLastEffort() {
@@ -321,6 +422,16 @@ void handleCommand(char *command) {
     return;
   }
 
+  if (strcmp(command, "sleep") == 0) {
+    if (digitalRead(WAKE_BUTTON_PIN) == LOW) {
+      sleepWhenWakeButtonReleased = true;
+      Serial.println(F("# sleep_requested,release_button_to_sleep"));
+    } else {
+      enterDeepSleep();
+    }
+    return;
+  }
+
   if (strcmp(command, "help") == 0) {
     printHelp();
     return;
@@ -419,10 +530,12 @@ void loadPersistentSettings() {
 }
 
 void setup() {
+  initializeWakeButton();
   Serial.begin(115200);
   delay(1500);
 
   Serial.println(F("# dyno_starting"));
+  printWakeCause();
   bleTelemetry.begin();
 
   loadcell.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
@@ -442,6 +555,7 @@ void setup() {
 }
 
 void loop() {
+  pollWakeButton();
   bleTelemetry.poll();
   readSerialCommands();
   readBleCommands();

@@ -12,8 +12,21 @@ Install the ESP32 Arduino core and the
 
 The HX711 connections expected by the firmware are:
 
+- `D1`: active-low sleep/wake button
 - `D4`: HX711 `DOUT`
 - `D5`: HX711 `PD_SCK`
+
+## Sleep and wake button
+
+The schematic's R2 pulls XIAO `D1` (GPIO 3) high, and SW1 connects it to ground
+when pressed. Hold SW1 for two seconds and then release it to enter deep sleep.
+Releasing before sleep prevents the active-low wake source from immediately
+waking the board again. Press SW1 once while the board is asleep to wake it.
+
+After a button wake, the firmware waits for SW1 to be released before arming
+the hold-to-sleep behavior. This prevents a long wake press from creating a
+sleep/wake loop. Deep sleep can also be requested with the `sleep` serial or
+BLE command; if SW1 is held, sleep begins when it is released.
 
 ## BLE
 
@@ -58,6 +71,7 @@ calibrate 98.0665
 thresholds 20 10 1000
 last
 status
+sleep
 help
 ```
 
@@ -69,6 +83,8 @@ help
   start threshold must be greater than the end threshold.
 - `last` reports the most recently completed effort.
 - `status` reports calibration, effort state, peak, and thresholds.
+- `sleep` enters deep sleep with SW1 on `D1` configured as the active-low wake
+  source.
 
 Calibration and threshold settings persist in ESP32 flash. The default factor
 converts the initial bench calibration of 6500 counts per pound-force:
