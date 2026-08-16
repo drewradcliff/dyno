@@ -9,3 +9,4 @@ _autosave-*
 *.bak
 fp-info-cache
 hardware/output/
+hardware/.history/
