@@ -39,6 +39,7 @@ SerialTelemetry serialTelemetry;
 BleTelemetry bleTelemetry;
 dyno::EffortDetector effortDetector(DEFAULT_EFFORT_CONFIG);
 
+bool hx711Initialized = false;
 bool hx711Detected = false;
 bool preferencesReady = false;
 float calibrationFactor = DEFAULT_CALIBRATION_FACTOR_COUNTS_PER_NEWTON;
@@ -89,7 +90,7 @@ void printWakeCause() {
 
 void enterDeepSleep() {
   cancelActiveEffort();
-  if (hx711Detected) {
+  if (hx711Initialized) {
     loadcell.power_down();
   }
   if (preferencesReady) {
@@ -539,6 +540,8 @@ void setup() {
   bleTelemetry.begin();
 
   loadcell.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
+  hx711Initialized = true;
+  loadcell.power_up();
   if (!loadcell.wait_ready_timeout(2000)) {
     Serial.println(F("# error,hx711_not_detected"));
     printHelp();
