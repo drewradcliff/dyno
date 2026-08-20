@@ -17,12 +17,14 @@
 constexpr int HX711_DOUT_PIN = D4;
 constexpr int HX711_SCK_PIN = D5;
 constexpr int WAKE_BUTTON_PIN = D1;
+constexpr int STATUS_LED_PIN = D3;
 
 // R2 holds D1 high and SW1 pulls it low. Requiring a hold avoids putting the
 // dyno to sleep during an accidental tap; sleep begins after the button is
 // released so the same low level cannot immediately wake it again.
 constexpr uint32_t WAKE_BUTTON_DEBOUNCE_MS = 30;
 constexpr uint32_t WAKE_BUTTON_SLEEP_HOLD_MS = 2000;
+constexpr uint32_t STATUS_LED_BLINK_INTERVAL_MS = 500;
 
 // A positive factor means raw count rises with applied force. Use a negative
 // factor if it falls. Serial calibration commands are persisted in flash.
@@ -42,6 +44,7 @@ dyno::EffortDetector effortDetector(DEFAULT_EFFORT_CONFIG);
 bool hx711Initialized = false;
 bool hx711Detected = false;
 bool preferencesReady = false;
+bool statusError = false;
 float calibrationFactor = DEFAULT_CALIBRATION_FACTOR_COUNTS_PER_NEWTON;
 long tareOffset = 0;
 
@@ -64,6 +67,20 @@ uint32_t wakeButtonPressedAtMs = 0;
 char commandBuffer[COMMAND_BUFFER_SIZE];
 size_t commandLength = 0;
 bool discardCommandUntilNewline = false;
+
+void initializeStatusLed() {
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
+}
+
+void updateStatusLed() {
+  bool ledOn = effortDetector.active();
+  if (statusError) {
+    ledOn = (millis() / STATUS_LED_BLINK_INTERVAL_MS) % 2 == 0;
+  }
+
+  digitalWrite(STATUS_LED_PIN, ledOn ? HIGH : LOW);
+}
 
 void publishMeasurement(const dyno::ForceMeasurement &measurement) {
   serialTelemetry.publishMeasurement(measurement);
@@ -90,6 +107,7 @@ void printWakeCause() {
 
 void enterDeepSleep() {
   cancelActiveEffort();
+  digitalWrite(STATUS_LED_PIN, LOW);
   if (hx711Initialized) {
     loadcell.power_down();
   }
@@ -531,6 +549,7 @@ void loadPersistentSettings() {
 }
 
 void setup() {
+  initializeStatusLed();
   initializeWakeButton();
   Serial.begin(115200);
   delay(1500);
@@ -543,6 +562,7 @@ void setup() {
   hx711Initialized = true;
   loadcell.power_up();
   if (!loadcell.wait_ready_timeout(2000)) {
+    statusError = true;
     Serial.println(F("# error,hx711_not_detected"));
     printHelp();
     return;
@@ -558,6 +578,7 @@ void setup() {
 }
 
 void loop() {
+  updateStatusLed();
   pollWakeButton();
   bleTelemetry.poll();
   readSerialCommands();

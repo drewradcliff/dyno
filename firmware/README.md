@@ -13,8 +13,12 @@ Install the ESP32 Arduino core and the
 The HX711 connections expected by the firmware are:
 
 - `D1`: active-low sleep/wake button
+- `D3`: active-high status LED
 - `D4`: HX711 `DOUT`
 - `D5`: HX711 `PD_SCK`
+
+The status LED is off while the dyno is idle, solid while an effort is active,
+and blinks every 500 ms if the HX711 is not detected at startup.
 
 ## Sleep and wake button
 
