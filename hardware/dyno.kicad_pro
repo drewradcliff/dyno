@@ -39,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.8,
-          "height": 1.27,
-          "width": 1.27
+          "drill": 0.0,
+          "height": 2.0,
+          "width": 2.75
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -703,7 +703,7 @@
         "uuid": "4794880d-712b-4580-84b8-951e06b5b989"
       }
     ],
-    "used_designators": "SW1,#FLG1-4,BT1,D1,Q1-2,C1-7,#PWR1-19,J1-2,R1-7,U1-3",
+    "used_designators": "SW1,D1,Q1-2,C1-7,#PWR1-19,#FLG1-4,BT1,J1-2,R1-7,U1-3",
     "variants": []
   },
   "sheets": [
