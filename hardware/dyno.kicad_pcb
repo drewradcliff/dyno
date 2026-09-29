@@ -3033,7 +3033,7 @@
 				)
 			)
 		)
-		(property "JLCPCB Part #" "C9900071238"
+		(property "JLCPCB Part #" "C18212168"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")
@@ -3046,7 +3046,7 @@
 				)
 			)
 		)
-		(property "MPN" "XIAO-ESP32-C3"
+		(property "MPN" "113991054"
 			(at 0 0 0)
 			(unlocked yes)
 			(layer "F.Fab")

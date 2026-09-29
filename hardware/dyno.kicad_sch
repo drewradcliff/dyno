@@ -4076,7 +4076,7 @@
 				)
 			)
 		)
-		(property "JLCPCB Part #" "C9900071238"
+		(property "JLCPCB Part #" "C18212168"
 			(at 224.79 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -4087,7 +4087,7 @@
 				)
 			)
 		)
-		(property "MPN" "XIAO-ESP32-C3"
+		(property "MPN" "113991054"
 			(at 224.79 93.98 0)
 			(hide yes)
 			(show_name no)
