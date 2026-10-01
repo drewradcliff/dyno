@@ -3520,6 +3520,11 @@
 			(uuid "059eb5fd-7c74-4778-b84d-b411d6a30558")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/libraries/3dmodels/XIAO-ESP32-C3-SMD.step"
+			(offset (xyz 0 0 0))
+			(scale (xyz 1 1 1))
+			(rotate (xyz 0 0 0))
+		)
 	)
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
